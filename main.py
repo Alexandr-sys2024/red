@@ -2,46 +2,70 @@ import time
 import csv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException
 
-driver = webdriver.Chrome()
 
-url = "https://tomsk.hh.ru/vacancies/programmist"
+def init_driver():
+    chrome_options = Options()
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    return webdriver.Chrome(options=chrome_options)
 
-driver.get(url)
 
-time.sleep(3)
+try:
+    driver = init_driver()
+    wait = WebDriverWait(driver, 20)  # Увеличиваем время ожидания до 20 секунд
 
-vacancies = driver.find_elements(By.CLASS_NAME, 'vacancy-card--H8LvOiOGPll0jZvYpxIF')
+    url = "https://www.divan.ru/category/svet"
+    driver.get(url)
 
-parsed_data = []
+    # Даем странице полностью загрузиться
+    time.sleep(5)
 
-for vacancy in vacancies:
+    # Прокручиваем страницу, чтобы загрузить все элементы
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    time.sleep(2)
+
     try:
-   # Находим элементы внутри вакансий по значению
-   # Находим названия вакансии
-        title = vacancy.find_element(By.CSS_SELECTOR, 'span.vacancy-name--SYbxrgpHgHedVTkgI_cA').text
-     # Находим названия компаний
-        company = vacancy.find_element(By.CSS_SELECTOR, 'span.company-info-text--O32pGCRW0YDmp3BHuNOP').text
-     # Находим зарплаты
-        salary = vacancy.find_element(By.CSS_SELECTOR, 'span.compensation-text--cCPBXayRjn5GuLFWhGTJ').text
-     # Находим ссылку с помощью атрибута 'href'
-        link = vacancy.find_element(By.CSS_SELECTOR, 'a.bloko-link').get_attribute('href')
-   # Вставляем блок except на случай ошибки - в случае ошибки программа попытается продолжать
-    except:
-        print("произошла ошибка при парсинге")
-        continue
-# Вносим найденную информацию в список
-    parsed_data.append([title, company, salary, link])
+        # Ждем появления первого элемента товара
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div._Ud0k')))
 
-# Закрываем подключение браузер
-driver.quit()
-# Прописываем открытие нового файла, задаём ему название и форматирование
-# 'w' означает режим доступа, мы разрешаем вносить данные в таблицу
-with open("hh.csv", 'w',newline='', encoding='utf-8') as file:
-# Используем модуль csv и настраиваем запись данных в виде таблицы
-# Создаём объект
-    writer = csv.writer(file)
-# Создаём первый ряд
-    writer.writerow(['Название вакансии', 'название компании', 'зарплата', 'ссылка на вакансию'])
-# Прописываем использование списка как источника для рядов таблицы
-    writer.writerows(parsed_data)
+        # Получаем все товары
+        luminaires = driver.find_elements(By.CSS_SELECTOR, 'div._Ud0k')
+
+        parsed_data = []
+
+        for luminaire in luminaires:
+            try:
+                name = luminaire.find_element(By.CSS_SELECTOR, 'div.lsooF span').text
+                price = luminaire.find_element(By.CSS_SELECTOR, 'div.pY3d2 span').text
+                link = luminaire.find_element(By.TAG_NAME, 'a').get_attribute('href')
+
+                print(f"Найдено: {name} - {price}")
+                parsed_data.append([name, price, link])
+            except Exception as e:
+                print(f"Ошибка при парсинге элемента: {str(e)}")
+                continue
+
+        # Записываем данные в CSV файл
+        with open('luminaires.csv', 'w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Название', 'Цена', 'Ссылка'])
+            writer.writerows(parsed_data)
+
+    except TimeoutException:
+        print("Превышено время ожидания загрузки элементов")
+    except Exception as e:
+        print(f"Произошла ошибка: {str(e)}")
+
+finally:
+    try:
+        driver.quit()
+    except:
+        pass
+
+print("Парсинг завершен")
